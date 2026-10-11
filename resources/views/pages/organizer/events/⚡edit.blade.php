@@ -107,6 +107,12 @@ new #[Title('イベント編集')] class extends Component {
     {
         $this->authorize('delete', $this->event);
 
+        if ($this->event->orders()->exists()) {
+            Flux::toast(variant: 'danger', text: '注文があるため削除できません。');
+
+            return;
+        }
+
         $this->event->delete();
 
         Flux::toast(variant: 'success', text: 'イベントを削除しました。');
@@ -208,21 +214,25 @@ new #[Title('イベント編集')] class extends Component {
     {
         $this->authorize('update', $this->event);
 
-        $deleted = DB::transaction(function () use ($ticketTypeId): bool {
+        $errorMessage = DB::transaction(function () use ($ticketTypeId): ?string {
             $event = Event::query()->lockForUpdate()->findOrFail($this->event->id);
             $ticketType = $event->ticketTypes()->findOrFail($ticketTypeId);
 
+            if ($ticketType->orderItems()->exists()) {
+                return '注文があるため削除できません。';
+            }
+
             if ($event->isPublished() && $event->ticketTypes()->count() === 1) {
-                return false;
+                return '公開中のイベントの券種をすべて削除することはできません。';
             }
 
             $ticketType->delete();
 
-            return true;
+            return null;
         });
 
-        if (! $deleted) {
-            Flux::toast(variant: 'danger', text: '公開中のイベントの券種をすべて削除することはできません。');
+        if ($errorMessage !== null) {
+            Flux::toast(variant: 'danger', text: $errorMessage);
 
             return;
         }

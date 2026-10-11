@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Event;
+use App\Models\OrderItem;
 use App\Models\TicketType;
 use App\Models\User;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
@@ -136,6 +137,18 @@ test('organizers can delete a ticket type', function () {
         ->assertOk();
 
     expect($ticketType->fresh())->toBeNull();
+});
+
+test('ticket types with orders cannot be deleted', function () {
+    $ticketType = OrderItem::factory()->create()->ticketType;
+    TicketType::factory()->for($ticketType->event)->create();
+
+    Livewire::actingAs($ticketType->event->organizer)
+        ->test('pages::organizer.events.edit', ['event' => $ticketType->event])
+        ->call('deleteTicketType', $ticketType->id)
+        ->assertOk();
+
+    expect($ticketType->fresh())->not->toBeNull();
 });
 
 test('the last ticket type of a published event cannot be deleted', function () {

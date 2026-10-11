@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Enums\OrderStatus;
 use Database\Factories\TicketTypeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -25,6 +28,13 @@ class TicketType extends Model
 {
     /** @use HasFactory<TicketTypeFactory> */
     use HasFactory;
+
+    /**
+     * Minutes during which a pending order still reserves its tickets.
+     *
+     * To be moved to OrderService in chapter 06.
+     */
+    public const PENDING_MINUTES = 15;
 
     /**
      * Get the attributes that should be cast.
@@ -52,6 +62,16 @@ class TicketType extends Model
     }
 
     /**
+     * Get the order items for the ticket type.
+     *
+     * @return HasMany<OrderItem, $this>
+     */
+    public function orderItems(): HasMany
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
+    /**
      * Determine if the ticket type is within its sales period.
      *
      * Both the start and end times are inclusive.
@@ -59,5 +79,25 @@ class TicketType extends Model
     public function isOnSale(): bool
     {
         return now()->between($this->sales_starts_at, $this->sales_ends_at);
+    }
+
+    /**
+     * Get the number of tickets that can still be ordered.
+     *
+     * Paid orders and pending orders created within the last PENDING_MINUTES are reserved.
+     */
+    public function remainingCount(): int
+    {
+        $reservedCount = (int) $this->orderItems()
+            ->whereHas('order', function (Builder $query) {
+                $query->where('status', OrderStatus::Paid)
+                    ->orWhere(function (Builder $query) {
+                        $query->where('status', OrderStatus::Pending)
+                            ->where('created_at', '>=', now()->subMinutes(self::PENDING_MINUTES));
+                    });
+            })
+            ->sum('quantity');
+
+        return max(0, $this->capacity - $reservedCount);
     }
 }

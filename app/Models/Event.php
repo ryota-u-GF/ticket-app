@@ -74,6 +74,16 @@ class Event extends Model
     }
 
     /**
+     * Get the orders for the event.
+     *
+     * @return HasMany<Order, $this>
+     */
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    /**
      * Scope a query to only include published events.
      *
      * @param  Builder<self>  $query
@@ -84,13 +94,13 @@ class Event extends Model
     }
 
     /**
-     * Scope a query to only include events that have not started yet, nearest first.
+     * Scope a query to only include events that have not ended yet, nearest start first.
      *
      * @param  Builder<self>  $query
      */
     public function scopeUpcoming(Builder $query): void
     {
-        $query->where('starts_at', '>', now())->orderBy('starts_at');
+        $query->where('ends_at', '>', now())->orderBy('starts_at')->orderBy('id');
     }
 
     /**

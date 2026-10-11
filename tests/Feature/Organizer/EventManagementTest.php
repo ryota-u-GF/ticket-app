@@ -2,6 +2,7 @@
 
 use App\Enums\EventStatus;
 use App\Models\Event;
+use App\Models\OrderItem;
 use App\Models\TicketType;
 use App\Models\User;
 use Livewire\Livewire;
@@ -152,6 +153,19 @@ test('organizers can delete their event', function () {
         ->assertRedirect(route('organizer.events.index'));
 
     expect($event->fresh())->toBeNull();
+});
+
+test('events with orders cannot be deleted', function () {
+    $item = OrderItem::factory()->create();
+    $event = $item->order->event;
+
+    Livewire::actingAs($event->organizer)
+        ->test('pages::organizer.events.edit', ['event' => $event])
+        ->call('deleteEvent')
+        ->assertOk()
+        ->assertNoRedirect();
+
+    expect($event->fresh())->not->toBeNull();
 });
 
 test('actions are authorized again after the page was opened', function (string $method) {
