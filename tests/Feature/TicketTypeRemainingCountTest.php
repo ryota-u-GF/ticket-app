@@ -4,6 +4,7 @@ use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\TicketType;
+use App\Services\OrderService;
 
 /**
  * Create an order item of the given status and quantity for the ticket type.
@@ -30,7 +31,7 @@ test('pending orders older than the pending minutes are not counted', function (
 
     orderTickets($ticketType, OrderStatus::Pending, 5);
 
-    $this->travel(TicketType::PENDING_MINUTES - 1)->minutes();
+    $this->travel(OrderService::PENDING_MINUTES - 1)->minutes();
     expect($ticketType->remainingCount())->toBe(45);
 
     $this->travel(2)->minutes();
@@ -60,7 +61,7 @@ test('a pending order is still counted exactly at the pending minutes and releas
 
     orderTickets($ticketType, OrderStatus::Pending, 5);
 
-    $this->travel(TicketType::PENDING_MINUTES)->minutes();
+    $this->travel(OrderService::PENDING_MINUTES)->minutes();
     expect($ticketType->remainingCount())->toBe(45);
 
     $this->travel(1)->seconds();

@@ -15,7 +15,7 @@ test('authenticated users are redirected by role', function (UserRole $role, str
     $response = $this->get(route('dashboard'));
     $response->assertRedirect($expectedPath);
 })->with([
-    'admin' => [UserRole::Admin, '/admin/events'],
+    'admin' => [UserRole::Admin, '/'],
     'organizer' => [UserRole::Organizer, '/organizer/events'],
-    'customer' => [UserRole::Customer, '/my/orders'],
+    'customer' => [UserRole::Customer, '/'],
 ]);

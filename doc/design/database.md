@@ -161,12 +161,12 @@ erDiagram
 残り枚数 = 定員（capacity）− 確保済みの枚数
 確保済みの枚数 = 次の注文に含まれる、その券種の quantity の合計
   ・status が paid の注文
-  ・status が pending で、作成から15分（`TicketType::PENDING_MINUTES`）以内の注文
+  ・status が pending で、作成から15分（`OrderService::PENDING_MINUTES`）以内の注文
 ```
 
 - 支払い待ちの注文も枠を押さえる。押さえないと、支払い中に他の人が同じ枠を買えてしまい、定員を超える
 - 支払いを途中でやめた注文がいつまでも枠を押さえないよう、pending は15分で数えなくなる
-- 数える時間は今は15分にしている。Stripe Checkout Session の有効期限（`expires_at`）の最小値は30分なので、このままだと「まだ支払えるのに枠を数えない」時間ができ、定員を超えるおそれがある。06 章で OrderService に移すときに見直す
+- 数える時間は今は15分にしている。Stripe Checkout Session の有効期限（`expires_at`）の最小値は30分なので、このままだと「まだ支払えるのに枠を数えない」時間ができ、定員を超えるおそれがある。Stripe 連携時に見直す
 
 ### 例
 
@@ -192,7 +192,7 @@ public function remainingCount(): int
             $query->where('status', OrderStatus::Paid)
                 ->orWhere(function ($query) {
                     $query->where('status', OrderStatus::Pending)
-                        ->where('created_at', '>=', now()->subMinutes(self::PENDING_MINUTES));
+                        ->where('created_at', '>=', now()->subMinutes(OrderService::PENDING_MINUTES));
                 });
         })
         ->sum('quantity');
