@@ -50,4 +50,14 @@ class TicketType extends Model
     {
         return $this->belongsTo(Event::class);
     }
+
+    /**
+     * Determine if the ticket type is within its sales period.
+     *
+     * Both the start and end times are inclusive.
+     */
+    public function isOnSale(): bool
+    {
+        return now()->between($this->sales_starts_at, $this->sales_ends_at);
+    }
 }

@@ -94,8 +94,8 @@ erDiagram
 | id | bigint | PK | |
 | event_id | bigint | FK → events.id, cascade | イベント削除で券種も消える |
 | name | string(100) | NOT NULL | 券種名（一般、学生など） |
-| price | unsigned int | NOT NULL | 価格（円、整数）。Stripe に通すため 1 円以上（アプリ側で検証） |
-| capacity | unsigned int | NOT NULL | 定員 |
+| price | unsigned int | NOT NULL | 価格（円、整数）。Stripe に通すため 1 円以上、1,000,000 円以下（アプリ側で検証） |
+| capacity | unsigned int | NOT NULL | 定員。1 以上 100,000 以下（アプリ側で検証） |
 | sales_starts_at | datetime | NOT NULL | 販売開始 |
 | sales_ends_at | datetime | NOT NULL | 販売終了。sales_starts_at より後（バリデーション） |
 

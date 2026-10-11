@@ -2,6 +2,7 @@
 
 use App\Enums\EventStatus;
 use App\Models\Event;
+use App\Models\TicketType;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -107,7 +108,7 @@ test('organizers can update their event', function () {
 });
 
 test('organizers can publish and unpublish their event', function () {
-    $event = Event::factory()->create();
+    $event = Event::factory()->has(TicketType::factory())->create();
 
     $component = Livewire::actingAs($event->organizer)
         ->test('pages::organizer.events.edit', ['event' => $event])
@@ -116,6 +117,17 @@ test('organizers can publish and unpublish their event', function () {
     expect($event->refresh()->status)->toBe(EventStatus::Published);
 
     $component->call('togglePublish');
+
+    expect($event->refresh()->status)->toBe(EventStatus::Draft);
+});
+
+test('events without ticket types cannot be published', function () {
+    $event = Event::factory()->create();
+
+    Livewire::actingAs($event->organizer)
+        ->test('pages::organizer.events.edit', ['event' => $event])
+        ->call('togglePublish')
+        ->assertOk();
 
     expect($event->refresh()->status)->toBe(EventStatus::Draft);
 });
