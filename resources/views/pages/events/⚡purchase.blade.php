@@ -19,8 +19,7 @@ new #[Title('購入内容の確認')] class extends Component {
      */
     public function mount(Event $event): void
     {
-        $this->authorize('view', $event);
-        abort_unless($event->isPublished(), 404);
+        $this->authorize('purchase', $event);
 
         $this->event = $event;
 
@@ -77,6 +76,8 @@ new #[Title('購入内容の確認')] class extends Component {
      */
     public function pay(OrderService $orderService): void
     {
+        $this->authorize('purchase', $this->event);
+
         try {
             $order = $orderService->createOrder(auth()->user(), $this->event, $this->quantities());
         } catch (PurchaseException $e) {

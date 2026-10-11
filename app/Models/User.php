@@ -53,6 +53,16 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     }
 
     /**
+     * Get the events organized by the user.
+     *
+     * @return HasMany<Event, $this>
+     */
+    public function organizedEvents(): HasMany
+    {
+        return $this->hasMany(Event::class, 'organizer_id');
+    }
+
+    /**
      * Get the orders placed by the user.
      *
      * @return HasMany<Order, $this>

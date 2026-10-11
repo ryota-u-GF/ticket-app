@@ -46,7 +46,7 @@ new #[Title('イベント詳細')] class extends Component {
      */
     public function proceed(): void
     {
-        abort_unless($this->event->isPublished(), 404);
+        $this->authorize('purchase', $this->event);
 
         $this->validate([
             'quantities.*' => ['nullable', 'integer', 'between:0,'.OrderService::MAX_QUANTITY],

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Event;
+use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\TicketType;
 use App\Models\User;
@@ -27,6 +28,29 @@ test('organizers can add a ticket type to their event', function () {
         ->and($ticketType->price)->toBe(3000)
         ->and($ticketType->capacity)->toBe(50)
         ->and($ticketType->sales_ends_at->format('Y-m-d H:i'))->toBe('2026-11-30 23:59');
+});
+
+test('the capacity cannot be lowered below the reserved count', function () {
+    $ticketType = TicketType::factory()->create(['capacity' => 50]);
+    OrderItem::factory()
+        ->for(Order::factory()->paid()->for($ticketType->event))
+        ->for($ticketType)
+        ->create(['quantity' => 30]);
+
+    $component = Livewire::actingAs($ticketType->event->organizer)
+        ->test('pages::organizer.events.edit', ['event' => $ticketType->event])
+        ->call('editTicketType', $ticketType->id)
+        ->set('ticket_capacity', '29')
+        ->call('saveTicketType')
+        ->assertHasErrors('ticket_capacity');
+
+    expect($ticketType->fresh()->capacity)->toBe(50);
+
+    $component->set('ticket_capacity', '30')
+        ->call('saveTicketType')
+        ->assertHasNoErrors();
+
+    expect($ticketType->fresh()->capacity)->toBe(30);
 });
 
 test('organizers can edit a ticket type using the same form', function () {

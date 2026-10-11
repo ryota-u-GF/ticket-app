@@ -26,6 +26,16 @@ class EventPolicy
     }
 
     /**
+     * Only published events can be purchased, by anyone logged in or not.
+     *
+     * Denied requests get a 404 so that unpublished events stay hidden.
+     */
+    public function purchase(?User $user, Event $event): Response
+    {
+        return $event->isPublished() ? Response::allow() : Response::denyAsNotFound();
+    }
+
+    /**
      * Determine whether the user can create events.
      */
     public function create(User $user): bool

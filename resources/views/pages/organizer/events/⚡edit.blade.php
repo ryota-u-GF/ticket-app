@@ -178,6 +178,14 @@ new #[Title('イベント編集')] class extends Component {
                 return;
             }
 
+            $reservedCount = $ticketType->reservedCount();
+
+            if ($attributes['capacity'] < $reservedCount) {
+                $this->addError('ticket_capacity', "販売済みの枚数（{$reservedCount}枚）より少なくできません。");
+
+                return;
+            }
+
             $ticketType->update($attributes);
 
             Flux::toast(variant: 'success', text: '券種を更新しました。');
