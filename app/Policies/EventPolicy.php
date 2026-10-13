@@ -56,7 +56,15 @@ class EventPolicy
      */
     public function delete(User $user, Event $event): bool
     {
-        return $this->owns($user, $event);
+        return $this->owns($user, $event) && ! $event->orders()->exists();
+    }
+
+    /**
+     * Determine whether the user can see the paid orders and sales of the event.
+     */
+    public function viewOrders(User $user, Event $event): bool
+    {
+        return $this->owns($user, $event) || $user->isAdmin();
     }
 
     /**

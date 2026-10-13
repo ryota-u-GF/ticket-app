@@ -37,7 +37,7 @@ new class extends Component {
             try {
                 $this->recoveryCodes = json_decode(decrypt($user->two_factor_recovery_codes), true);
             } catch (Exception) {
-                $this->addError('recoveryCodes', 'Failed to load recovery codes');
+                $this->addError('recoveryCodes', 'リカバリーコードを読み込めませんでした。');
 
                 $this->recoveryCodes = [];
             }

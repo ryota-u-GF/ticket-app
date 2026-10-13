@@ -1,5 +1,12 @@
 <?php
 
+use App\Enums\OrderStatus;
+use App\Models\Event;
+use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\TicketType;
+use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -47,4 +54,36 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Create a published event with a ticket type and one paid order of 2 tickets.
+ *
+ * @return array{0: Event, 1: TicketType, 2: Order}
+ */
+function eventWithPaidOrder(string $name = '山田太郎', string $email = 'taro@example.com'): array
+{
+    $event = Event::factory()->published()->create();
+    $ticketType = TicketType::factory()->for($event)->create(['name' => '一般', 'capacity' => 50]);
+    $buyer = User::factory()->create(['name' => $name, 'email' => $email]);
+    $order = Order::factory()->paid()->for($event)->for($buyer)->create(['total_amount' => 6000]);
+    OrderItem::factory()->for($order)->for($ticketType)->create(['quantity' => 2, 'unit_price' => 3000]);
+
+    return [$event, $ticketType, $order];
+}
+
+/**
+ * Create an order of one ticket type with its item.
+ */
+function salesOrder(Event $event, TicketType $ticketType, int $quantity, int $unitPrice, ?OrderStatus $status = null, ?string $buyerName = null, ?CarbonInterface $paidAt = null): Order
+{
+    $buyer = User::factory()->create($buyerName ? ['name' => $buyerName] : []);
+    $order = Order::factory()->for($event)->for($buyer)->create([
+        'status' => $status ?? OrderStatus::Paid,
+        'paid_at' => ($status ?? OrderStatus::Paid) === OrderStatus::Paid ? ($paidAt ?? now()) : null,
+        'total_amount' => $quantity * $unitPrice,
+    ]);
+    OrderItem::factory()->for($order)->for($ticketType)->create(['quantity' => $quantity, 'unit_price' => $unitPrice]);
+
+    return $order;
 }

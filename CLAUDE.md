@@ -41,6 +41,7 @@
 - 金額は円の整数（unsigned int）。明細には注文時点の単価を `unit_price` に保存し、券種の `price` は参照しない
 - 1注文 = 1イベント（`orders.event_id`）。明細の券種はすべて同じイベントのもの
 - 売上に関わる外部キーは restrict（注文があるイベント・券種は削除不可）。子データ（券種・明細・チケット）だけ cascade
+- 売上は `paid` の注文だけを数え、明細の「`unit_price` × `quantity`」の合計で計算する（`Event::salesAmount()`）。`orders.total_amount` は集計に使わない
 - 残り枚数はカラムに持たず `TicketType::remainingCount()` で計算する。数える注文は2種類: `paid` と、作成から35分（`OrderService::PENDING_MINUTES`）以内の `pending`。Stripe の Session は31分で期限切れにし（`CheckoutService::SESSION_MINUTES`）、注文のキャンセル時も expire する
 
 ### 画面
