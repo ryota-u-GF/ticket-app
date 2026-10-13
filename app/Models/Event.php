@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\EventStatus;
+use App\Enums\OrderStatus;
 use Database\Factories\EventFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -10,7 +11,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @property int $id
@@ -84,6 +87,16 @@ class Event extends Model
     }
 
     /**
+     * Get the order items of the event through its orders.
+     *
+     * @return HasManyThrough<OrderItem, Order, $this>
+     */
+    public function orderItems(): HasManyThrough
+    {
+        return $this->hasManyThrough(OrderItem::class, Order::class);
+    }
+
+    /**
      * Scope a query to only include published events.
      *
      * @param  Builder<self>  $query
@@ -101,6 +114,28 @@ class Event extends Model
     public function scopeUpcoming(Builder $query): void
     {
         $query->where('ends_at', '>', now())->orderBy('starts_at')->orderBy('id');
+    }
+
+    /**
+     * Get the number of tickets sold, counting paid orders only.
+     */
+    public function soldQuantity(): int
+    {
+        return (int) OrderItem::query()
+            ->whereHas('order', fn (Builder $query) => $query
+                ->where('event_id', $this->id)
+                ->where('status', OrderStatus::Paid))
+            ->sum('quantity');
+    }
+
+    /**
+     * Get the sales amount in yen: the sum of unit_price times quantity of the items of paid orders.
+     */
+    public function salesAmount(): int
+    {
+        return (int) $this->orderItems()
+            ->where('orders.status', OrderStatus::Paid)
+            ->sum(DB::raw('order_items.quantity * order_items.unit_price'));
     }
 
     /**
