@@ -12,18 +12,23 @@ use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class OrderService
 {
     /**
      * Minutes during which a pending order still reserves its tickets.
+     *
+     * Longer than CheckoutService::SESSION_MINUTES, so the tickets stay reserved as long as the payment page is open.
      */
-    public const PENDING_MINUTES = 15;
+    public const PENDING_MINUTES = 35;
 
     /**
      * The maximum number of tickets per ticket type in one order.
      */
     public const MAX_QUANTITY = 10;
+
+    public function __construct(private CheckoutService $checkoutService) {}
 
     /**
      * Create a pending order with its items.
@@ -44,11 +49,91 @@ class OrderService
         $quantities = $this->selectedQuantities($quantities);
         $ticketTypes = $this->ticketTypesOf($event, array_keys($quantities));
 
+        $staleSessionIds = [];
+
         try {
-            return Cache::lock("create-order:{$user->id}:{$event->id}", 10)
-                ->block(5, fn (): Order => $this->placeOrder($user, $event, $quantities, $ticketTypes));
+            $order = Cache::lock("create-order:{$user->id}:{$event->id}", 10)
+                ->block(5, function () use ($user, $event, $quantities, $ticketTypes, &$staleSessionIds): Order {
+                    return $this->placeOrder($user, $event, $quantities, $ticketTypes, $staleSessionIds);
+                });
         } catch (LockTimeoutException) {
             throw new PurchaseException('注文が混み合っています。しばらくしてからもう一度お試しください。');
+        }
+
+        $this->expireCheckoutSessions($staleSessionIds);
+
+        return $order;
+    }
+
+    /**
+     * Cancel the order if it is still pending, which frees the tickets it reserved.
+     *
+     * The status is checked in the query itself, so an order that was paid in the meantime is never cancelled.
+     *
+     * @return bool Whether the order was cancelled.
+     */
+    public function cancelOrder(Order $order): bool
+    {
+        $cancelled = Order::query()
+            ->whereKey($order->id)
+            ->where('status', OrderStatus::Pending)
+            ->update(['status' => OrderStatus::Cancelled]) > 0;
+
+        $order->refresh();
+
+        if ($cancelled && $order->stripe_checkout_session_id !== null) {
+            $this->expireCheckoutSessions([$order->stripe_checkout_session_id]);
+        }
+
+        return $cancelled;
+    }
+
+    /**
+     * Mark the order as paid and issue one ticket per ordered quantity.
+     *
+     * The status is checked in the UPDATE itself, so when the webhook and the completion page arrive at the same time
+     * only one of them updates the row and issues the tickets.
+     *
+     * @param  string|null  $paymentIntentId  Not stored yet; kept for refunds.
+     * @return bool Whether this call paid the order, false when it was already handled.
+     */
+    public function markAsPaid(Order $order, ?string $paymentIntentId = null): bool
+    {
+        $paid = DB::transaction(function () use ($order): bool {
+            $updated = Order::query()
+                ->whereKey($order->id)
+                ->where('status', OrderStatus::Pending)
+                ->update(['status' => OrderStatus::Paid, 'paid_at' => now()]) > 0;
+
+            if (! $updated) {
+                return false;
+            }
+
+            foreach ($order->items()->get() as $item) {
+                for ($i = 0; $i < $item->quantity; $i++) {
+                    $item->tickets()->create(['code' => (string) Str::ulid()]);
+                }
+            }
+
+            return true;
+        });
+
+        $order->refresh();
+
+        return $paid;
+    }
+
+    /**
+     * Expire the Checkout Sessions, so a cancelled order can no longer be paid from an open payment page.
+     *
+     * This runs outside of any transaction, because it calls Stripe.
+     *
+     * @param  list<string>  $sessionIds
+     */
+    private function expireCheckoutSessions(array $sessionIds): void
+    {
+        foreach ($sessionIds as $sessionId) {
+            $this->checkoutService->expireSession($sessionId);
         }
     }
 
@@ -60,17 +145,20 @@ class OrderService
      *
      * @param  array<int, int>  $quantities
      * @param  Collection<int, TicketType>  $ticketTypes
+     * @param  list<string>  $staleSessionIds  Filled with the Checkout Session ids of the orders that were cancelled.
      *
      * @throws PurchaseException
      */
-    private function placeOrder(User $user, Event $event, array $quantities, Collection $ticketTypes): Order
+    private function placeOrder(User $user, Event $event, array $quantities, Collection $ticketTypes, array &$staleSessionIds): Order
     {
-        return DB::transaction(function () use ($user, $event, $quantities, $ticketTypes): Order {
-            Order::query()
+        return DB::transaction(function () use ($user, $event, $quantities, $ticketTypes, &$staleSessionIds): Order {
+            $stalePendingOrders = Order::query()
                 ->whereBelongsTo($user)
                 ->whereBelongsTo($event)
-                ->where('status', OrderStatus::Pending)
-                ->update(['status' => OrderStatus::Cancelled]);
+                ->where('status', OrderStatus::Pending);
+
+            $sessionIds = (clone $stalePendingOrders)->whereNotNull('stripe_checkout_session_id')->pluck('stripe_checkout_session_id')->all();
+            $stalePendingOrders->update(['status' => OrderStatus::Cancelled]);
 
             foreach ($ticketTypes as $ticketType) {
                 $this->assertPurchasable($ticketType, $quantities[$ticketType->id]);
@@ -91,6 +179,8 @@ class OrderService
                     'unit_price' => $ticketType->price,
                 ]);
             }
+
+            $staleSessionIds = $sessionIds;
 
             return $order->load('items');
         });

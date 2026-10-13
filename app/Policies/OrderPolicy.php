@@ -16,4 +16,12 @@ class OrderPolicy
             || $order->event->organizer_id === $user->id
             || $user->isAdmin();
     }
+
+    /**
+     * Orders can be cancelled by the buyer only.
+     */
+    public function cancel(User $user, Order $order): bool
+    {
+        return $order->user_id === $user->id;
+    }
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\UserRole;
+use App\Http\Controllers\StripeWebhookController;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -8,9 +9,12 @@ use Illuminate\Support\Facades\Route;
 Route::livewire('/', 'pages::events.index')->name('home');
 Route::livewire('events/{event}', 'pages::events.show')->name('events.show');
 
+Route::post('stripe/webhook', StripeWebhookController::class)->name('stripe.webhook');
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('events/{event}/purchase', 'pages::events.purchase')->name('events.purchase');
     Route::livewire('orders/{order}/complete', 'pages::orders.complete')->name('orders.complete');
+    Route::livewire('orders/{order}/cancel', 'pages::orders.cancel')->name('orders.cancel');
 
     Route::get('dashboard', function (Request $request): RedirectResponse {
         // Admin and customer screens (/admin/events, /my/orders) do not exist yet; use the home page until they do.
