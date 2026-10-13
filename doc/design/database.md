@@ -161,12 +161,13 @@ erDiagram
 残り枚数 = 定員（capacity）− 確保済みの枚数
 確保済みの枚数 = 次の注文に含まれる、その券種の quantity の合計
   ・status が paid の注文
-  ・status が pending で、作成から15分（`OrderService::PENDING_MINUTES`）以内の注文
+  ・status が pending で、作成から35分（`OrderService::PENDING_MINUTES`）以内の注文
 ```
 
 - 支払い待ちの注文も枠を押さえる。押さえないと、支払い中に他の人が同じ枠を買えてしまい、定員を超える
-- 支払いを途中でやめた注文がいつまでも枠を押さえないよう、pending は15分で数えなくなる
-- 数える時間は今は15分にしている。Stripe Checkout Session の有効期限（`expires_at`）の最小値は30分なので、このままだと「まだ支払えるのに枠を数えない」時間ができ、定員を超えるおそれがある。Stripe 連携時に見直す
+- 支払いを途中でやめた注文がいつまでも枠を押さえないよう、pending は35分で数えなくなる
+- Stripe Checkout Session の有効期限（`expires_at`）は最小値が30分なので、作成から31分（`CheckoutService::SESSION_MINUTES`）に設定している。枠を数える時間（35分）はそれより長くし、「まだ支払えるのに枠を数えない」時間ができないようにしている
+- 注文をキャンセルしたとき（中断画面、購入のやり直し、Stripe 失敗）は、Stripe の Session も expire して、開いたままの決済ページで支払えないようにする
 
 ### 例
 

@@ -12,6 +12,14 @@ test('an order can be viewed by the buyer, the event organizer and admins', func
         ->and(Gate::forUser(User::factory()->admin()->create())->allows('view', $order))->toBeTrue();
 });
 
+test('an order can be cancelled by the buyer only', function () {
+    $order = Order::factory()->create();
+
+    expect(Gate::forUser($order->user)->allows('cancel', $order))->toBeTrue()
+        ->and(Gate::forUser($order->event->organizer)->allows('cancel', $order))->toBeFalse()
+        ->and(Gate::forUser(User::factory()->admin()->create())->allows('cancel', $order))->toBeFalse();
+});
+
 test('an order cannot be viewed by other users or other organizers', function () {
     $order = Order::factory()->create();
 

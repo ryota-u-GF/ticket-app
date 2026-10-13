@@ -12,7 +12,7 @@ use App\Services\OrderService;
 beforeEach(function () {
     $this->user = User::factory()->create();
     $this->event = Event::factory()->published()->create();
-    $this->service = new OrderService;
+    $this->service = app(OrderService::class);
 });
 
 /**
