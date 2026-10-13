@@ -74,5 +74,13 @@ new #[Title('購入の確認')] class extends Component {
     <flux:text>{{ $order->event->title }}</flux:text>
     <flux:text>合計: {{ number_format($order->total_amount) }}円</flux:text>
 
-    <flux:button :href="route('events.show', $order->event)" wire:navigate>イベント詳細へ戻る</flux:button>
+    <div class="flex gap-2">
+        @if ($order->isPaid())
+            @can('viewTickets', $order)
+                <flux:button variant="primary" :href="route('orders.show', $order)" wire:navigate>注文詳細を見る</flux:button>
+            @endcan
+        @endif
+
+        <flux:button :href="route('events.show', $order->event)" wire:navigate>イベント詳細へ戻る</flux:button>
+    </div>
 </section>

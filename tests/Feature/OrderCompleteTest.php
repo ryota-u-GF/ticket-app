@@ -111,3 +111,24 @@ test('other users cannot open the page', function () {
         ->get(route('orders.complete', $this->order).'?session_id=cs_test_1')
         ->assertForbidden();
 });
+
+test('a paid order links the buyer to the order detail', function () {
+    $this->order->update(['status' => OrderStatus::Paid, 'paid_at' => now()]);
+
+    openCompletePage($this->order)->assertSeeHtml('href="'.route('orders.show', $this->order).'"');
+});
+
+test('the event organizer is not offered the order detail link', function () {
+    $this->order->update(['status' => OrderStatus::Paid, 'paid_at' => now()]);
+
+    Livewire::actingAs($this->order->event->organizer)
+        ->test('pages::orders.complete', ['order' => $this->order])
+        ->assertDontSeeHtml('href="'.route('orders.show', $this->order).'"');
+});
+
+test('a pending order does not link to the order detail', function () {
+    $this->mock(CheckoutService::class)
+        ->shouldReceive('retrieveSession')->andReturn(stripeSession('unpaid'));
+
+    openCompletePage($this->order)->assertDontSeeHtml('href="'.route('orders.show', $this->order).'"');
+});

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\OrderStatus;
 use App\Exceptions\PurchaseException;
+use App\Mail\OrderPaidMail;
 use App\Models\Event;
 use App\Models\Order;
 use App\Models\TicketType;
@@ -12,6 +13,7 @@ use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class OrderService
@@ -120,7 +122,26 @@ class OrderService
 
         $order->refresh();
 
+        if ($paid) {
+            $this->sendPaidMail($order);
+        }
+
         return $paid;
+    }
+
+    /**
+     * Send the purchase confirmation mail.
+     *
+     * The order is already paid, so a mail failure is reported and never fails the caller (the webhook would be
+     * retried, but the order would not be paid again, so the mail would never be sent anyway).
+     */
+    private function sendPaidMail(Order $order): void
+    {
+        try {
+            Mail::to($order->user)->send(new OrderPaidMail($order));
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /**

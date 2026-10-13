@@ -13,14 +13,17 @@ Route::post('stripe/webhook', StripeWebhookController::class)->name('stripe.webh
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('events/{event}/purchase', 'pages::events.purchase')->name('events.purchase');
+    Route::livewire('orders', 'pages::orders.index')->name('orders.index');
+    Route::livewire('orders/{order}', 'pages::orders.show')->name('orders.show');
     Route::livewire('orders/{order}/complete', 'pages::orders.complete')->name('orders.complete');
     Route::livewire('orders/{order}/cancel', 'pages::orders.cancel')->name('orders.cancel');
 
     Route::get('dashboard', function (Request $request): RedirectResponse {
-        // Admin and customer screens (/admin/events, /my/orders) do not exist yet; use the home page until they do.
+        // The admin screens (/admin/events) do not exist yet; admins use the home page until they do.
         return redirect(match ($request->user()->role) {
             UserRole::Organizer => '/organizer/events',
-            UserRole::Admin, UserRole::Customer => '/',
+            UserRole::Customer => '/orders',
+            UserRole::Admin => '/',
         });
     })->name('dashboard');
 });

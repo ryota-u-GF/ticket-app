@@ -18,6 +18,14 @@ class OrderPolicy
     }
 
     /**
+     * The order details with the ticket codes can be viewed by the buyer only.
+     */
+    public function viewTickets(User $user, Order $order): bool
+    {
+        return $order->user_id === $user->id;
+    }
+
+    /**
      * Orders can be cancelled by the buyer only.
      */
     public function cancel(User $user, Order $order): bool
