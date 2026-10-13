@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\EventStatus;
 use App\Models\Event;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -138,6 +139,20 @@ test('paying creates the order and goes to the completion screen', function () {
         ->and($order->total_amount)->toBe(6000)
         ->and($order->items)->toHaveCount(1)
         ->and(session()->has("purchase.{$this->event->id}"))->toBeFalse();
+});
+
+test('paying is refused once the event is no longer published', function () {
+    $user = User::factory()->create();
+    session(["purchase.{$this->event->id}" => [$this->ticketType->id => 1]]);
+
+    $component = Livewire::actingAs($user)
+        ->test('pages::events.purchase', ['event' => $this->event]);
+
+    $this->event->update(['status' => EventStatus::Unpublished]);
+
+    $component->call('pay')->assertNotFound();
+
+    expect(Order::count())->toBe(0);
 });
 
 test('purchase errors are shown and no order is created', function () {

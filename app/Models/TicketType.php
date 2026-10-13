@@ -76,13 +76,13 @@ class TicketType extends Model
     }
 
     /**
-     * Get the number of tickets that can still be ordered.
+     * Get the number of tickets that are reserved.
      *
      * Paid orders and pending orders created within the last PENDING_MINUTES are reserved.
      */
-    public function remainingCount(): int
+    public function reservedCount(): int
     {
-        $reservedCount = (int) $this->orderItems()
+        return (int) $this->orderItems()
             ->whereHas('order', function (Builder $query) {
                 $query->where('status', OrderStatus::Paid)
                     ->orWhere(function (Builder $query) {
@@ -91,7 +91,13 @@ class TicketType extends Model
                     });
             })
             ->sum('quantity');
+    }
 
-        return max(0, $this->capacity - $reservedCount);
+    /**
+     * Get the number of tickets that can still be ordered.
+     */
+    public function remainingCount(): int
+    {
+        return max(0, $this->capacity - $this->reservedCount());
     }
 }
