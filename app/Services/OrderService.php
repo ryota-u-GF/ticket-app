@@ -12,6 +12,7 @@ use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class OrderService
 {
@@ -85,6 +86,41 @@ class OrderService
         }
 
         return $cancelled;
+    }
+
+    /**
+     * Mark the order as paid and issue one ticket per ordered quantity.
+     *
+     * The status is checked in the UPDATE itself, so when the webhook and the completion page arrive at the same time
+     * only one of them updates the row and issues the tickets.
+     *
+     * @param  string|null  $paymentIntentId  Not stored yet; kept for refunds.
+     * @return bool Whether this call paid the order, false when it was already handled.
+     */
+    public function markAsPaid(Order $order, ?string $paymentIntentId = null): bool
+    {
+        $paid = DB::transaction(function () use ($order): bool {
+            $updated = Order::query()
+                ->whereKey($order->id)
+                ->where('status', OrderStatus::Pending)
+                ->update(['status' => OrderStatus::Paid, 'paid_at' => now()]) > 0;
+
+            if (! $updated) {
+                return false;
+            }
+
+            foreach ($order->items()->get() as $item) {
+                for ($i = 0; $i < $item->quantity; $i++) {
+                    $item->tickets()->create(['code' => (string) Str::ulid()]);
+                }
+            }
+
+            return true;
+        });
+
+        $order->refresh();
+
+        return $paid;
     }
 
     /**

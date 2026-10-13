@@ -1,12 +1,15 @@
 <?php
 
 use App\Enums\UserRole;
+use App\Http\Controllers\StripeWebhookController;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::livewire('/', 'pages::events.index')->name('home');
 Route::livewire('events/{event}', 'pages::events.show')->name('events.show');
+
+Route::post('stripe/webhook', StripeWebhookController::class)->name('stripe.webhook');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('events/{event}/purchase', 'pages::events.purchase')->name('events.purchase');

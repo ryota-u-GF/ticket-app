@@ -5,6 +5,7 @@ use App\Exceptions\PurchaseException;
 use App\Models\Event;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Ticket;
 use App\Models\TicketType;
 use App\Models\User;
 use App\Services\CheckoutService;
@@ -77,6 +78,8 @@ test('a free order never reaches Stripe and has no checkout session id', functio
 
     expect(Order::first()->stripe_checkout_session_id)->toBeNull()
         ->and(Order::first()->total_amount)->toBe(0)
+        ->and(Order::first()->status)->toBe(OrderStatus::Paid)
+        ->and(Ticket::count())->toBe(2)
         ->and(session()->has("purchase.{$this->event->id}"))->toBeFalse();
 });
 

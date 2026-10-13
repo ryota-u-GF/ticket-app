@@ -90,6 +90,7 @@ new #[Title('購入内容の確認')] class extends Component {
         }
 
         if ($order->total_amount === 0) {
+            $orderService->markAsPaid($order);
             session()->forget("purchase.{$this->event->id}");
             $this->redirectRoute('orders.complete', $order);
 

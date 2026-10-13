@@ -151,7 +151,7 @@ test('paying creates the order and redirects to the Stripe payment page', functi
         ->and(session()->has("purchase.{$this->event->id}"))->toBeFalse();
 });
 
-test('a free order skips Stripe and goes to the completion screen as pending', function () {
+test('a free order skips Stripe and goes to the completion screen as paid', function () {
     $free = TicketType::factory()->for($this->event)->create(['name' => '無料', 'price' => 0]);
     session(["purchase.{$this->event->id}" => [$free->id => 1]]);
 
@@ -162,7 +162,7 @@ test('a free order skips Stripe and goes to the completion screen as pending', f
         ->call('pay')
         ->assertRedirect(route('orders.complete', Order::first()));
 
-    expect(Order::first()->status)->toBe(OrderStatus::Pending);
+    expect(Order::first()->status)->toBe(OrderStatus::Paid);
 });
 
 test('when Stripe fails the order is cancelled and an error is shown', function () {
@@ -252,7 +252,7 @@ test('the completion screen can be opened by the buyer, the organizer and admins
     foreach ([$order->user, $this->event->organizer, User::factory()->admin()->create()] as $user) {
         $this->actingAs($user)->get(route('orders.complete', $order))
             ->assertOk()
-            ->assertSee('注文を受け付けました');
+            ->assertSee('お支払いを確認中です');
     }
 
     $this->actingAs(User::factory()->create())->get(route('orders.complete', $order))->assertForbidden();
