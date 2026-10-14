@@ -33,10 +33,6 @@
                             ユーザー管理
                         </flux:navbar.item>
                     @endif
-
-                    <flux:navbar.item icon="cog" :href="route('profile.edit')" :current="request()->routeIs('profile.edit', 'appearance.edit', 'security.edit')" wire:navigate>
-                        設定
-                    </flux:navbar.item>
                 @endauth
             </flux:navbar>
 
@@ -89,10 +85,6 @@
                             ユーザー管理
                         </flux:sidebar.item>
                     @endif
-
-                    <flux:sidebar.item icon="cog" :href="route('profile.edit')" :current="request()->routeIs('profile.edit', 'appearance.edit', 'security.edit')" wire:navigate>
-                        設定
-                    </flux:sidebar.item>
                 @else
                     <flux:sidebar.item icon="arrow-right-end-on-rectangle" :href="route('login')" wire:navigate>
                         ログイン
