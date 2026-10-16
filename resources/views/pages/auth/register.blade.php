@@ -54,6 +54,19 @@
                 viewable
             />
 
+            <!-- Role -->
+            <flux:radio.group name="role" label="アカウントの種類">
+                @foreach (\App\Enums\UserRole::registrable() as $role)
+                    <flux:radio
+                        :value="$role->value"
+                        :label="$role->label()"
+                        :checked="old('role', \App\Enums\UserRole::Customer->value) === $role->value"
+                    />
+                @endforeach
+            </flux:radio.group>
+            {{-- flux:radio.group は name をエラー表示に渡さないため、明示的に表示する --}}
+            <flux:error name="role" class="-mt-3" />
+
             <div class="flex items-center justify-end">
                 <flux:button type="submit" variant="primary" class="w-full" data-test="register-user-button">
                     {{ __('Create account') }}

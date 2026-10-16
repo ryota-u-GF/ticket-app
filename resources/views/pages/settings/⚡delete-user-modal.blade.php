@@ -19,7 +19,17 @@ new class extends Component {
             'password' => $this->currentPasswordRules(),
         ]);
 
-        tap(Auth::user(), $logout(...))->delete();
+        $user = Auth::user();
+
+        if ($user->orders()->exists() || $user->organizedEvents()->exists()) {
+            $this->addError('password', '注文またはイベントがあるため退会できません。');
+
+            return;
+        }
+
+        // ログアウトは remember token を保存するため、削除より先に行う
+        $logout();
+        $user->delete();
 
         $this->redirect('/', navigate: true);
     }

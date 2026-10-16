@@ -26,7 +26,7 @@ erDiagram
         string venue
         datetime starts_at
         datetime ends_at
-        string status "draft / published"
+        string status "draft / published / unpublished"
     }
     ticket_types {
         bigint id PK
@@ -41,7 +41,7 @@ erDiagram
         bigint id PK
         bigint user_id FK
         bigint event_id FK
-        string status "pending / paid"
+        string status "pending / paid / cancelled / refunded"
         int total_amount
         string stripe_checkout_session_id UK
         datetime paid_at
@@ -78,12 +78,12 @@ erDiagram
 |-|-|-|-|
 | id | bigint | PK | |
 | organizer_id | bigint | FK → users.id, restrict | 主催者 |
-| title | string(255) | NOT NULL | イベント名 |
+| title | string(100) | NOT NULL | イベント名 |
 | description | text | NOT NULL | 説明 |
-| venue | string(255) | NOT NULL | 会場 |
+| venue | string(100) | NOT NULL | 会場 |
 | starts_at | datetime | NOT NULL | 開始日時。一覧の並び順と「開催済み除外」に使う |
-| ends_at | datetime | NULL | 終了日時 |
-| status | string(20) | NOT NULL, default `draft` | `draft` / `published`。Enum（`EventStatus`）にキャスト |
+| ends_at | datetime | NOT NULL | 終了日時。starts_at より後（バリデーション） |
+| status | string(20) | NOT NULL, default `draft` | `draft`（下書き） / `published`（公開） / `unpublished`（管理者が非公開化。主催者は公開に戻せない）。Enum（`EventStatus`）にキャスト |
 
 インデックス: `(status, starts_at)`（公開イベント一覧 C3 用）
 
@@ -94,8 +94,8 @@ erDiagram
 | id | bigint | PK | |
 | event_id | bigint | FK → events.id, cascade | イベント削除で券種も消える |
 | name | string(100) | NOT NULL | 券種名（一般、学生など） |
-| price | unsigned int | NOT NULL | 価格（円、整数）。Stripe に通すため 1 円以上（アプリ側で検証） |
-| capacity | unsigned int | NOT NULL | 定員 |
+| price | unsigned int | NOT NULL | 価格（円、整数）。Stripe に通すため 1 円以上、1,000,000 円以下（アプリ側で検証） |
+| capacity | unsigned int | NOT NULL | 定員。1 以上 100,000 以下（アプリ側で検証） |
 | sales_starts_at | datetime | NOT NULL | 販売開始 |
 | sales_ends_at | datetime | NOT NULL | 販売終了。sales_starts_at より後（バリデーション） |
 
@@ -106,7 +106,7 @@ erDiagram
 | id | bigint | PK | |
 | user_id | bigint | FK → users.id, restrict | 注文者 |
 | event_id | bigint | FK → events.id, restrict | 対象イベント。主催者の売上集計（C16）を単純にするために持つ |
-| status | string(20) | NOT NULL, default `pending` | `pending`（支払い待ち） / `paid`（支払い済み）。Enum（`OrderStatus`）にキャスト |
+| status | string(20) | NOT NULL, default `pending` | `pending`（支払い待ち） / `paid`（支払い済み） / `cancelled`（キャンセル済み） / `refunded`（返金済み）。値は先に Enum に用意し、cancelled / refunded への遷移は E3 で実装する。Enum（`OrderStatus`）にキャスト |
 | total_amount | unsigned int | NOT NULL | 合計金額（明細の単価×枚数の合計）。注文時点で確定 |
 | stripe_checkout_session_id | string(255) | NULL, UNIQUE | Checkout Session の ID。Day4 時点では NULL、Stripe へ進むときに保存 |
 | paid_at | datetime | NULL | 支払い確定日時。Webhook で保存 |
@@ -161,12 +161,12 @@ erDiagram
 残り枚数 = 定員（capacity）− 確保済みの枚数
 確保済みの枚数 = 次の注文に含まれる、その券種の quantity の合計
   ・status が paid の注文
-  ・status が pending で、作成から35分以内の注文
+  ・status が pending で、作成から15分（`OrderService::PENDING_MINUTES`）以内の注文
 ```
 
 - 支払い待ちの注文も枠を押さえる。押さえないと、支払い中に他の人が同じ枠を買えてしまい、定員を超える
-- 支払いを途中でやめた注文がいつまでも枠を押さえないよう、pending は35分で数えなくなる
-- Stripe Checkout Session の有効期限（`expires_at`）は作成から30分にする（Stripe の最小値）。注文作成から Session 作成までの時間差を見込んで、数える時間は5分長い35分にする。35分を過ぎた pending 注文は、もう支払えない
+- 支払いを途中でやめた注文がいつまでも枠を押さえないよう、pending は15分で数えなくなる
+- 数える時間は今は15分にしている。Stripe Checkout Session の有効期限（`expires_at`）の最小値は30分なので、このままだと「まだ支払えるのに枠を数えない」時間ができ、定員を超えるおそれがある。Stripe 連携時に見直す
 
 ### 例
 
@@ -192,7 +192,7 @@ public function remainingCount(): int
             $query->where('status', OrderStatus::Paid)
                 ->orWhere(function ($query) {
                     $query->where('status', OrderStatus::Pending)
-                        ->where('created_at', '>=', now()->subMinutes(35));
+                        ->where('created_at', '>=', now()->subMinutes(OrderService::PENDING_MINUTES));
                 });
         })
         ->sum('quantity');
@@ -218,4 +218,4 @@ public function remainingCount(): int
 - 拡張モジュールで足すカラム（今は作らない）
   - `events.image_path`（E14）
   - `tickets.checked_in_at`（E1）
-  - `orders.status` の `canceled` / `refunded`（E3）
+  - （`orders.status` の `cancelled` / `refunded` は Enum に用意済み。遷移の処理は E3 で実装する）
