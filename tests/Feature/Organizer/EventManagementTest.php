@@ -1,10 +1,13 @@
 <?php
 
 use App\Enums\EventStatus;
+use App\Enums\OrderStatus;
 use App\Models\Event;
+use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\TicketType;
 use App\Models\User;
+use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 
 test('organizers see only their own events on the index page', function () {
@@ -155,9 +158,26 @@ test('organizers can delete their event', function () {
     expect($event->fresh())->toBeNull();
 });
 
-test('events with orders cannot be deleted', function () {
-    $item = OrderItem::factory()->create();
+test('events with orders cannot be deleted whatever the order status', function (OrderStatus $status) {
+    $item = OrderItem::factory()->for(Order::factory()->state(['status' => $status]))->create();
     $event = $item->order->event;
+
+    expect(Gate::forUser($event->organizer)->allows('delete', $event))->toBeFalse();
+
+    Livewire::actingAs($event->organizer)
+        ->test('pages::organizer.events.edit', ['event' => $event])
+        ->assertSee('注文があるため、このイベントは削除できません。')
+        ->assertDontSee('イベントを削除')
+        ->call('deleteEvent')
+        ->assertForbidden();
+
+    expect($event->fresh())->not->toBeNull();
+})->with([OrderStatus::Pending, OrderStatus::Paid, OrderStatus::Cancelled, OrderStatus::Refunded]);
+
+test('an order created just before deleting keeps the event and shows a message', function () {
+    $event = Event::factory()->create();
+
+    Event::deleting(fn (Event $deleting) => Order::factory()->for($deleting)->create());
 
     Livewire::actingAs($event->organizer)
         ->test('pages::organizer.events.edit', ['event' => $event])
@@ -166,6 +186,17 @@ test('events with orders cannot be deleted', function () {
         ->assertNoRedirect();
 
     expect($event->fresh())->not->toBeNull();
+});
+
+test('deleting an event already deleted in another tab does not redirect', function () {
+    $event = Event::factory()->create();
+
+    $component = Livewire::actingAs($event->organizer)
+        ->test('pages::organizer.events.edit', ['event' => $event]);
+
+    $event->delete();
+
+    $component->call('deleteEvent')->assertNoRedirect();
 });
 
 test('actions are authorized again after the page was opened', function (string $method) {

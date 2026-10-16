@@ -1,12 +1,15 @@
 <?php
 
 use App\Enums\EventStatus;
+use App\Enums\OrderStatus;
 use App\Models\Event;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\TicketType;
 use App\Models\User;
+use App\Services\CheckoutService;
 use Livewire\Livewire;
+use Stripe\Exception\ApiConnectionException;
 
 beforeEach(function () {
     $this->event = Event::factory()->published()->create();
@@ -125,20 +128,92 @@ test('the purchase screen shows quantities, subtotals and the total', function (
         ->assertSee('合計 7,500円');
 });
 
-test('paying creates the order and goes to the completion screen', function () {
+test('paying creates the order and redirects to the Stripe payment page', function () {
     $user = User::factory()->create();
     session(["purchase.{$this->event->id}" => [$this->ticketType->id => 2]]);
+
+    $this->mock(CheckoutService::class)
+        ->shouldReceive('createSession')
+        ->once()
+        ->with(Mockery::on(fn (Order $order) => $order->total_amount === 6000))
+        ->andReturn('https://checkout.stripe.com/c/pay/test');
 
     Livewire::actingAs($user)
         ->test('pages::events.purchase', ['event' => $this->event])
         ->call('pay')
-        ->assertRedirect(route('orders.complete', Order::first()));
+        ->assertRedirect('https://checkout.stripe.com/c/pay/test');
 
     $order = Order::first();
     expect($order->user_id)->toBe($user->id)
+        ->and($order->status)->toBe(OrderStatus::Pending)
         ->and($order->total_amount)->toBe(6000)
         ->and($order->items)->toHaveCount(1)
         ->and(session()->has("purchase.{$this->event->id}"))->toBeFalse();
+});
+
+test('a free order skips Stripe and goes to the completion screen as paid', function () {
+    $free = TicketType::factory()->for($this->event)->create(['name' => '無料', 'price' => 0]);
+    session(["purchase.{$this->event->id}" => [$free->id => 1]]);
+
+    $this->mock(CheckoutService::class)->shouldNotReceive('createSession');
+
+    Livewire::actingAs(User::factory()->create())
+        ->test('pages::events.purchase', ['event' => $this->event])
+        ->call('pay')
+        ->assertRedirect(route('orders.complete', Order::first()));
+
+    expect(Order::first()->status)->toBe(OrderStatus::Paid);
+});
+
+test('when Stripe fails the order is cancelled and an error is shown', function () {
+    session(["purchase.{$this->event->id}" => [$this->ticketType->id => 1]]);
+
+    $this->mock(CheckoutService::class)
+        ->shouldReceive('createSession')
+        ->andThrow(new ApiConnectionException('boom'));
+
+    Livewire::actingAs(User::factory()->create())
+        ->test('pages::events.purchase', ['event' => $this->event])
+        ->call('pay')
+        ->assertHasErrors('purchase')
+        ->assertNoRedirect();
+
+    expect(Order::first()->status)->toBe(OrderStatus::Cancelled);
+});
+
+test('cancelling frees the tickets and marks the order as cancelled', function () {
+    $order = Order::factory()->for($this->event)->create();
+    OrderItem::factory()->for($order)->for($this->ticketType)->create(['quantity' => 5]);
+
+    expect($this->ticketType->remainingCount())->toBe(45);
+
+    Livewire::actingAs($order->user)
+        ->test('pages::orders.cancel', ['order' => $order])
+        ->assertSee('お支払いを中断しました');
+
+    expect($order->refresh()->status)->toBe(OrderStatus::Cancelled)
+        ->and($this->ticketType->remainingCount())->toBe(50);
+});
+
+test('a paid order is not cancelled from the cancel screen', function () {
+    $order = Order::factory()->paid()->for($this->event)->create();
+
+    Livewire::actingAs($order->user)
+        ->test('pages::orders.cancel', ['order' => $order])
+        ->assertSee('この注文はキャンセルできません');
+
+    expect($order->refresh()->status)->toBe(OrderStatus::Paid);
+});
+
+test('only the buyer can open the cancel screen', function () {
+    $order = Order::factory()->for($this->event)->create();
+
+    $this->actingAs(User::factory()->create())->get(route('orders.cancel', $order))->assertForbidden();
+    $this->actingAs($this->event->organizer)->get(route('orders.cancel', $order))->assertForbidden();
+    $this->actingAs($order->user)->get(route('orders.cancel', $order))->assertOk();
+
+    auth()->logout();
+    $this->get(route('orders.cancel', $order))->assertRedirect(route('login'));
 });
 
 test('paying is refused once the event is no longer published', function () {
@@ -177,7 +252,7 @@ test('the completion screen can be opened by the buyer, the organizer and admins
     foreach ([$order->user, $this->event->organizer, User::factory()->admin()->create()] as $user) {
         $this->actingAs($user)->get(route('orders.complete', $order))
             ->assertOk()
-            ->assertSee('注文を受け付けました');
+            ->assertSee('お支払いを確認中です');
     }
 
     $this->actingAs(User::factory()->create())->get(route('orders.complete', $order))->assertForbidden();

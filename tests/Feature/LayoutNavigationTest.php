@@ -30,7 +30,7 @@ test('the navigation changes by role', function (UserRole $role, array $visible,
 
     expect($html)
         ->toContain('イベント一覧')
-        ->toContain('/my/orders')
+        ->toContain(route('orders.index'))
         ->toContain(route('profile.edit'))
         ->toContain('logout-button')
         ->not->toContain('会員登録');

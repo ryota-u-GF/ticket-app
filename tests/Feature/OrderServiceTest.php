@@ -5,6 +5,7 @@ use App\Exceptions\PurchaseException;
 use App\Models\Event;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Ticket;
 use App\Models\TicketType;
 use App\Models\User;
 use App\Services\OrderService;
@@ -12,7 +13,7 @@ use App\Services\OrderService;
 beforeEach(function () {
     $this->user = User::factory()->create();
     $this->event = Event::factory()->published()->create();
-    $this->service = new OrderService;
+    $this->service = app(OrderService::class);
 });
 
 /**
@@ -175,4 +176,25 @@ test('orders of other users, other events and paid orders are not cancelled', fu
     expect($otherUsersOrder->fresh()->status)->toBe(OrderStatus::Pending)
         ->and($otherEventOrder->fresh()->status)->toBe(OrderStatus::Pending)
         ->and($paidOrder->fresh()->status)->toBe(OrderStatus::Paid);
+});
+
+test('markAsPaid pays only a pending order and issues the tickets once', function () {
+    $order = Order::factory()->create();
+    OrderItem::factory()->for($order)->create(['quantity' => 3]);
+
+    expect($this->service->markAsPaid($order, 'pi_test_1'))->toBeTrue()
+        ->and($order->status)->toBe(OrderStatus::Paid)
+        ->and($order->paid_at)->not->toBeNull()
+        ->and(Ticket::count())->toBe(3)
+        ->and($this->service->markAsPaid($order))->toBeFalse()
+        ->and(Ticket::count())->toBe(3);
+});
+
+test('markAsPaid does not pay a cancelled order', function () {
+    $order = Order::factory()->create(['status' => OrderStatus::Cancelled]);
+    OrderItem::factory()->for($order)->create(['quantity' => 1]);
+
+    expect($this->service->markAsPaid($order))->toBeFalse()
+        ->and($order->status)->toBe(OrderStatus::Cancelled)
+        ->and(Ticket::count())->toBe(0);
 });

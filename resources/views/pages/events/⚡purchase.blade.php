@@ -3,6 +3,7 @@
 use App\Exceptions\PurchaseException;
 use App\Models\Event;
 use App\Models\TicketType;
+use App\Services\CheckoutService;
 use App\Services\OrderService;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
@@ -72,9 +73,11 @@ new #[Title('購入内容の確認')] class extends Component {
     }
 
     /**
-     * Create the order and go to the completion screen.
+     * Create the order and go to the Stripe payment page.
+     *
+     * Free orders skip Stripe and go straight to the completion screen.
      */
-    public function pay(OrderService $orderService): void
+    public function pay(OrderService $orderService, CheckoutService $checkoutService): void
     {
         $this->authorize('purchase', $this->event);
 
@@ -86,9 +89,27 @@ new #[Title('購入内容の確認')] class extends Component {
             return;
         }
 
-        session()->forget("purchase.{$this->event->id}");
+        if ($order->total_amount === 0) {
+            $orderService->markAsPaid($order);
+            session()->forget("purchase.{$this->event->id}");
+            $this->redirectRoute('orders.complete', $order);
 
-        $this->redirectRoute('orders.complete', $order);
+            return;
+        }
+
+        try {
+            $url = $checkoutService->createSession($order);
+        } catch (\Throwable $e) {
+            // The selection stays in the session, so the user can press the button again.
+            report($e);
+            $orderService->cancelOrder($order);
+            $this->addError('purchase', '決済ページを開けませんでした。しばらくしてからもう一度お試しください。');
+
+            return;
+        }
+
+        session()->forget("purchase.{$this->event->id}");
+        $this->redirect($url);
     }
 }; ?>
 

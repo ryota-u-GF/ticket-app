@@ -15,7 +15,7 @@
                 </flux:navbar.item>
 
                 @auth
-                    <flux:navbar.item icon="ticket" href="/my/orders" :current="request()->is('my/orders*')" wire:navigate>
+                    <flux:navbar.item icon="ticket" :href="route('orders.index')" :current="request()->routeIs('orders.index', 'orders.show')" wire:navigate>
                         マイチケット
                     </flux:navbar.item>
 
@@ -33,10 +33,6 @@
                             ユーザー管理
                         </flux:navbar.item>
                     @endif
-
-                    <flux:navbar.item icon="cog" :href="route('profile.edit')" :current="request()->routeIs('profile.edit', 'appearance.edit', 'security.edit')" wire:navigate>
-                        設定
-                    </flux:navbar.item>
                 @endauth
             </flux:navbar>
 
@@ -71,7 +67,7 @@
                 </flux:sidebar.item>
 
                 @auth
-                    <flux:sidebar.item icon="ticket" href="/my/orders" :current="request()->is('my/orders*')" wire:navigate>
+                    <flux:sidebar.item icon="ticket" :href="route('orders.index')" :current="request()->routeIs('orders.index', 'orders.show')" wire:navigate>
                         マイチケット
                     </flux:sidebar.item>
 
@@ -89,10 +85,6 @@
                             ユーザー管理
                         </flux:sidebar.item>
                     @endif
-
-                    <flux:sidebar.item icon="cog" :href="route('profile.edit')" :current="request()->routeIs('profile.edit', 'appearance.edit', 'security.edit')" wire:navigate>
-                        設定
-                    </flux:sidebar.item>
                 @else
                     <flux:sidebar.item icon="arrow-right-end-on-rectangle" :href="route('login')" wire:navigate>
                         ログイン
